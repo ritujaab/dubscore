@@ -1,0 +1,33 @@
+@import url("https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&display=swap");
+@import "tailwindcss";
+
+:root {
+  --bg:        #0c0c0e;
+  --bg2:       #141416;
+  --bg3:       #1c1c20;
+  --border:    rgba(255,255,255,0.07);
+  --border2:   rgba(255,255,255,0.13);
+  --text:      #f0efe8;
+  --muted:     #888780;
+  --accent:    #5DCAA5;
+  --accent2:   #1D9E75;
+  --warn:      #EF9F27;
+  --danger:    #E24B4A;
+  --font-head: 'Syne', sans-serif;
+  --font-mono: 'DM Mono', monospace;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-mono);
+  min-height: 100vh;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.3; }
+}
+.animate-pulse-dot { animation: pulse-dot 1.2s ease-in-out infinite; }

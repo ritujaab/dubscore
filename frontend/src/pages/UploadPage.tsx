@@ -1,0 +1,283 @@
+import { useState, useRef } from 'react'
+import { api } from '../api/client'
+import type { AllScoresResponse } from '../types'
+
+type StepState = 'idle' | 'running' | 'done' | 'error'
+
+interface Steps {
+  chunks:     StepState
+  spnr:       StepState
+  lipsync:    StepState
+  clone:      StepState
+  age_gender: StepState
+}
+
+interface StepTimes {
+  chunks?: string
+  spnr?:   string
+  lipsync?: string
+  clone?:  string
+  age_gender?: string 
+}
+
+export default function UploadPage({
+  onBack,
+  onDone,
+}: {
+  onBack: () => void
+  onDone: (r: AllScoresResponse) => void
+}) {
+  const [nChunks, setNChunks] = useState<number>(5)
+  const [origFile, setOrigFile] = useState<File | null>(null)
+  const [dubFile,  setDubFile]  = useState<File | null>(null)
+  const [running,  setRunning]  = useState(false)
+  const [error,    setError]    = useState<string | null>(null)
+  const [steps,    setSteps]    = useState<Steps>({ chunks: 'idle', spnr: 'idle', lipsync: 'idle', clone: 'idle', age_gender: 'idle' })
+  const [times,    setTimes]    = useState<StepTimes>({})
+
+  const origRef = useRef<HTMLInputElement>(null)
+  const dubRef  = useRef<HTMLInputElement>(null)
+
+  function setStep(key: keyof Steps, state: StepState, time?: string) {
+    setSteps(s  => ({ ...s, [key]: state }))
+    if (time !== undefined) setTimes(t => ({ ...t, [key]: time }))
+  }
+
+  async function run() {
+    if (!origFile || !dubFile) return
+    setRunning(true)
+    setError(null)
+    setSteps({ chunks: 'idle', spnr: 'idle', lipsync: 'idle', clone: 'idle', age_gender: 'idle' })
+
+    setTimes({})
+
+    try {
+      setStep('chunks', 'running')
+      const t0 = Date.now()
+      const formData = new FormData()
+      formData.append('orig_file', origFile)
+      formData.append('dub_file',  dubFile)
+      formData.append('n_chunks',  String(nChunks))
+      await api.postChunks(formData)
+      setStep('chunks', 'done', elapsed(t0))
+
+      setStep('spnr',    'running')
+      setStep('lipsync', 'running')
+      setStep('clone',   'running')
+
+      const [spnrResult, lipsyncResult, cloneResult] = await Promise.all([
+        api.getSpnr().then(r => { setStep('spnr', 'done', elapsed(t0)); return r })
+          .catch(e => { setStep('spnr', 'error'); throw e }),
+        api.getLipsync().then(r => { setStep('lipsync', 'done', elapsed(t0)); return r })
+          .catch(e => { setStep('lipsync', 'error'); throw e }),
+        api.getVoiceClone().then(r => { setStep('clone', 'done', elapsed(t0)); return r })
+          .catch(e => { setStep('clone', 'error'); throw e }),
+      ])
+
+      setStep('age_gender', 'running')
+      const ageGenderResult = await api.getAgeGender()
+      setStep('age_gender', ageGenderResult.triggered ? 'done' : 'idle')
+
+      onDone({
+        spnr:        spnrResult,
+        lipsync:     lipsyncResult,
+        voice_clone: cloneResult,
+        age_gender:  ageGenderResult,
+      })
+
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Unknown error'
+      setError(msg)
+      setSteps(s => ({
+        chunks:     s.chunks     === 'running' ? 'error' : s.chunks,
+        spnr:       s.spnr       === 'running' ? 'error' : s.spnr,
+        lipsync:    s.lipsync    === 'running' ? 'error' : s.lipsync,
+        clone:      s.clone      === 'running' ? 'error' : s.clone,
+        age_gender: s.age_gender === 'running' ? 'error' : s.age_gender,  // ← missing
+      }))
+    }
+  }
+
+  const canRun = !!origFile && !!dubFile && !running
+
+  return (
+    <div style={{ paddingTop: 48 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 40 }}>
+        <button onClick={onBack} style={backBtnStyle}>← Back</button>
+        <div style={{ fontFamily: 'var(--font-head)', fontSize: 22, fontWeight: 700, letterSpacing: -0.3 }}>
+          Upload videos
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 24 }}>
+        <DropZone
+          label="Original"
+          hint="Source language video"
+          file={origFile}
+          inputRef={origRef}
+          onFile={setOrigFile}
+        />
+        <DropZone
+          label="Dubbed"
+          hint="Translated / dubbed video"
+          file={dubFile}
+          inputRef={dubRef}
+          onFile={setDubFile}
+        />
+      </div>
+
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 12,
+        marginBottom: 24, padding: '14px 16px',
+        background: 'var(--bg2)', border: '0.5px solid var(--border)',
+        borderRadius: 10,
+      }}>
+        <div style={{ fontSize: 13, color: 'var(--muted)', flex: 1 }}>
+          Number of chunks
+        </div>
+        <input
+          type="number"
+          min={2} max={20} value={nChunks}
+          onChange={e => setNChunks(Math.max(2, Math.min(20, Number(e.target.value))))}
+          style={{
+            width: 64, padding: '6px 10px', textAlign: 'center',
+            background: 'var(--bg3)', border: '0.5px solid var(--border2)',
+            borderRadius: 8, color: 'var(--text)',
+            fontFamily: 'var(--font-mono)', fontSize: 13,
+          }}
+        />
+      </div>
+
+      <button
+        onClick={run}
+        disabled={!canRun}
+        style={{
+          width: '100%', padding: 14,
+          background: canRun ? 'var(--accent2)' : 'var(--bg3)',
+          border: 'none', borderRadius: 10,
+          color: canRun ? '#04342C' : 'var(--muted)',
+          fontFamily: 'var(--font-head)', fontWeight: 700, fontSize: 15,
+          cursor: canRun ? 'pointer' : 'not-allowed',
+          transition: 'background 0.15s',
+        }}
+      >
+        {running ? 'Running…' : 'Run Analysis'}
+      </button>
+
+      {error && (
+        <div style={{
+          marginTop: 16, padding: '12px 16px',
+          background: 'rgba(226,75,74,0.1)', border: '0.5px solid rgba(226,75,74,0.3)',
+          borderRadius: 10, fontSize: 13, color: 'var(--danger)',
+        }}>
+          {error}
+        </div>
+      )}
+
+      {Object.values(steps).some(s => s !== 'idle') && (
+        <div style={{
+          marginTop: 24, background: 'var(--bg2)',
+          border: '0.5px solid var(--border)', borderRadius: 16, padding: '28px 24px',
+        }}>
+          <div style={{
+            fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.08em',
+            color: 'var(--muted)', marginBottom: 20,
+          }}>
+            Pipeline
+          </div>
+          <StepRow state={steps.chunks}  label="Extracting & chunking audio"  time={times.chunks}  />
+          <StepRow state={steps.spnr}    label="SpNR — speech noise ratio"    time={times.spnr}    />
+          <StepRow state={steps.lipsync} label="Lip sync analysis"            time={times.lipsync} />
+          <StepRow state={steps.clone}   label="Voice clone similarity"       time={times.clone}   />
+          {steps.age_gender !== 'idle' && (
+            <StepRow state={steps.age_gender} label="Age / gender consistency" time={times.age_gender} />
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function DropZone({
+  label, hint, file, inputRef, onFile,
+}: {
+  label: string
+  hint: string
+  file: File | null
+  inputRef: React.RefObject<HTMLInputElement | null>
+  onFile: (f: File) => void
+}) {
+  const [drag, setDrag] = useState(false)
+
+  return (
+    <div
+      onDragOver={e => { e.preventDefault(); setDrag(true) }}
+      onDragLeave={() => setDrag(false)}
+      onDrop={e => { e.preventDefault(); setDrag(false); const f = e.dataTransfer.files[0]; if (f) onFile(f) }}
+      onClick={() => inputRef.current?.click()}
+      style={{
+        background: drag ? 'rgba(93,202,165,0.04)' : 'var(--bg2)',
+        border: `1.5px dashed ${drag || file ? 'var(--accent)' : 'var(--border2)'}`,
+        borderRadius: 16, padding: '36px 24px', textAlign: 'center',
+        cursor: 'pointer', transition: 'all 0.15s',
+      }}
+    >
+      <input
+        ref={inputRef}
+        type="file"
+        accept="video/*"
+        style={{ display: 'none' }}
+        onChange={e => { const f = e.target.files?.[0]; if (f) onFile(f) }}
+      />
+      <div style={{ fontSize: 28, color: file ? 'var(--accent)' : 'var(--muted)', marginBottom: 12 }}>
+        {file ? '✓' : '↑'}
+      </div>
+      <div style={{
+        fontFamily: 'var(--font-head)', fontSize: 13, fontWeight: 600,
+        color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4,
+      }}>
+        {label}
+      </div>
+      <div style={{ fontSize: 11, color: 'var(--muted)' }}>{hint}</div>
+      {file && (
+        <div style={{ fontSize: 12, color: 'var(--text)', marginTop: 8, wordBreak: 'break-all' }}>
+          {file.name}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function StepRow({ state, label, time }: { state: StepState; label: string; time?: string }) {
+  const dotColor = state === 'done' ? 'var(--accent)' : state === 'error' ? 'var(--danger)' : state === 'running' ? 'var(--warn)' : 'var(--bg3)'
+  const dotBorder = state === 'idle' ? 'var(--border2)' : dotColor
+
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 12,
+      padding: '8px 0', fontSize: 13,
+      borderBottom: '0.5px solid var(--border)',
+    }}>
+      <div
+        className={state === 'running' ? 'animate-pulse-dot' : ''}
+        style={{
+          width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
+          background: dotColor, border: `1.5px solid ${dotBorder}`,
+          transition: 'background 0.2s',
+        }}
+      />
+      <div style={{ flex: 1, color: 'var(--text)' }}>{label}</div>
+      {time && <div style={{ fontSize: 11, color: 'var(--muted)' }}>{time}</div>}
+    </div>
+  )
+}
+
+const backBtnStyle: React.CSSProperties = {
+  background: 'none', border: '0.5px solid var(--border)',
+  color: 'var(--muted)', padding: '6px 12px', borderRadius: 10,
+  cursor: 'pointer', fontFamily: 'var(--font-mono)', fontSize: 12,
+}
+
+function elapsed(t0: number) {
+  return ((Date.now() - t0) / 1000).toFixed(1) + 's'
+}

@@ -1,0 +1,28 @@
+# Ignore virtual environments
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Ignore syncnet model and temporary output folders
+backend/syncnet_python/
+backend/try.ipynb
+backend/audio
+backend/output
+backend/separated
+backend/uploads
+backend/.env
+
+# Node.js dependencies and build output
+frontend/node_modules/
+dist/
+.DS_Store
+
+# Logs
+*.log
+
+# IDE and editor settings
+.vscode/
+.idea/
