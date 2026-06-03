@@ -5,19 +5,17 @@ import type { AllScoresResponse } from '../types'
 type StepState = 'idle' | 'running' | 'done' | 'error'
 
 interface Steps {
-  chunks:     StepState
-  spnr:       StepState
-  lipsync:    StepState
-  clone:      StepState
-  age_gender: StepState
+  chunks:  StepState
+  spnr:    StepState
+  lipsync: StepState
+  auth:    StepState
 }
 
 interface StepTimes {
   chunks?: string
   spnr?:   string
   lipsync?: string
-  clone?:  string
-  age_gender?: string 
+  auth?: string
 }
 
 export default function UploadPage({
@@ -32,7 +30,7 @@ export default function UploadPage({
   const [dubFile,  setDubFile]  = useState<File | null>(null)
   const [running,  setRunning]  = useState(false)
   const [error,    setError]    = useState<string | null>(null)
-  const [steps,    setSteps]    = useState<Steps>({ chunks: 'idle', spnr: 'idle', lipsync: 'idle', clone: 'idle', age_gender: 'idle' })
+  const [steps,    setSteps]    = useState<Steps>({ chunks: 'idle', spnr: 'idle', lipsync: 'idle', auth: 'idle' })
   const [times,    setTimes]    = useState<StepTimes>({})
 
   const origRef = useRef<HTMLInputElement>(null)
@@ -47,7 +45,7 @@ export default function UploadPage({
     if (!origFile || !dubFile) return
     setRunning(true)
     setError(null)
-    setSteps({ chunks: 'idle', spnr: 'idle', lipsync: 'idle', clone: 'idle', age_gender: 'idle' })
+    setSteps({ chunks: 'idle', spnr: 'idle', lipsync: 'idle', auth: 'idle' })
 
     setTimes({})
 
@@ -61,28 +59,50 @@ export default function UploadPage({
       await api.postChunks(formData)
       setStep('chunks', 'done', elapsed(t0))
 
-      setStep('spnr',    'running')
+      setStep('spnr', 'running')
       setStep('lipsync', 'running')
-      setStep('clone',   'running')
 
-      const [spnrResult, lipsyncResult, cloneResult] = await Promise.all([
-        api.getSpnr().then(r => { setStep('spnr', 'done', elapsed(t0)); return r })
-          .catch(e => { setStep('spnr', 'error'); throw e }),
-        api.getLipsync().then(r => { setStep('lipsync', 'done', elapsed(t0)); return r })
-          .catch(e => { setStep('lipsync', 'error'); throw e }),
-        api.getVoiceClone().then(r => { setStep('clone', 'done', elapsed(t0)); return r })
-          .catch(e => { setStep('clone', 'error'); throw e }),
-      ])
+      // Start SpNR and LipSync together
+      const spnrPromise = api.getSpnr()
+        .then(r => {
+          setStep('spnr', 'done', elapsed(t0))
+          return r
+        })
+        .catch(e => {
+          setStep('spnr', 'error')
+          throw e
+        })
 
-      setStep('age_gender', 'running')
-      const ageGenderResult = await api.getAgeGender()
-      setStep('age_gender', ageGenderResult.triggered ? 'done' : 'idle')
+      const lipsyncResult = await api.getLipsync()
+        .then(r => {
+          setStep('lipsync', 'done', elapsed(t0))
+          return r
+        })
+        .catch(e => {
+          setStep('lipsync', 'error')
+          throw e
+        })
+
+      // Only start Voice Auth after LipSync finishes
+      setStep('auth', 'running')
+
+      const authResult = await api.getVoiceAuthenticity()
+        .then(r => {
+          setStep('auth', 'done', elapsed(t0))
+          return r
+        })
+        .catch(e => {
+          setStep('auth', 'error')
+          throw e
+        })
+
+      // Wait for SpNR if it hasn't completed yet
+      const spnrResult = await spnrPromise
 
       onDone({
-        spnr:        spnrResult,
-        lipsync:     lipsyncResult,
-        voice_clone: cloneResult,
-        age_gender:  ageGenderResult,
+        spnr: spnrResult,
+        lipsync: lipsyncResult,
+        voice_authenticity: authResult,
       })
 
     } catch (err: unknown) {
@@ -92,8 +112,7 @@ export default function UploadPage({
         chunks:     s.chunks     === 'running' ? 'error' : s.chunks,
         spnr:       s.spnr       === 'running' ? 'error' : s.spnr,
         lipsync:    s.lipsync    === 'running' ? 'error' : s.lipsync,
-        clone:      s.clone      === 'running' ? 'error' : s.clone,
-        age_gender: s.age_gender === 'running' ? 'error' : s.age_gender,  // ← missing
+        auth:       s.auth       === 'running' ? 'error' : s.auth
       }))
     }
   }
@@ -188,10 +207,7 @@ export default function UploadPage({
           <StepRow state={steps.chunks}  label="Extracting & chunking audio"  time={times.chunks}  />
           <StepRow state={steps.spnr}    label="SpNR — speech noise ratio"    time={times.spnr}    />
           <StepRow state={steps.lipsync} label="Lip sync analysis"            time={times.lipsync} />
-          <StepRow state={steps.clone}   label="Voice clone similarity"       time={times.clone}   />
-          {steps.age_gender !== 'idle' && (
-            <StepRow state={steps.age_gender} label="Age / gender consistency" time={times.age_gender} />
-          )}
+          <StepRow state={steps.auth} label="Voice authenticity" time={times.auth} />
         </div>
       )}
     </div>

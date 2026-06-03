@@ -1,6 +1,6 @@
-import type { SpnrSegment, LipsyncSegment, CloneSegment, OverallSegment, AgeGenderSegment } from '../types'
+import type { SpnrSegment, LipsyncSegment, OverallSegment, VoiceAuthSegment } from '../types'
 
-type AnySegment = SpnrSegment | LipsyncSegment | CloneSegment | OverallSegment | AgeGenderSegment
+type AnySegment = SpnrSegment | LipsyncSegment | VoiceAuthSegment | OverallSegment
 
 interface HeatmapProps {
   segments: AnySegment[]

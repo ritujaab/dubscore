@@ -24,7 +24,7 @@ app.add_middleware(
 
 _state: dict = {}
 
-CLONE_FAIL_THRESHOLD = 0.7
+CLONE_THRESHOLD = 0.7
 
 def _require_chunks():
     if not _state:
@@ -46,23 +46,32 @@ def _run_lipsync(job: dict):
     df = df.replace({np.nan: None})
     return {"score": score, "segments": df.to_dict(orient="records")}
 
-def _run_clone(job: dict):
-    score, df = clone_score(
+def _run_voice_authenticity(job: dict):
+    clone_score_val, clone_df = clone_score(
         job["orig_intervals"], job["dub_intervals"],
         job["v_orig"], job["sr_orig"],
         job["v_dub"],  job["sr_dub"],
     )
-    df = df.replace({np.nan: None})
-    return {"score": score, "segments": df.to_dict(orient="records")}
+    clone_df = clone_df.replace({np.nan: None})
 
-def _run_age_gender(job: dict):
-    score, df = age_gender_score(
-        job["dub_intervals"],
-        job["v_dub"],
-        job["sr_dub"],
+    if clone_score_val >= CLONE_THRESHOLD:
+        return {
+            "score":    clone_score_val,
+            "method":   "clone",
+            "segments": clone_df.to_dict(orient="records"),
+        }
+
+    # clone failed — fall back to age/gender
+    ag_score_val, ag_df = age_gender_score(
+        job["dub_intervals"], job["v_dub"], job["sr_dub"]
     )
-    df = df.replace({np.nan: None})
-    return {"score": score, "segments": df.to_dict(orient="records")}
+    ag_df = ag_df.replace({np.nan: None})
+
+    return {
+        "score":    ag_score_val,
+        "method":   "age_gender",
+        "segments": ag_df.to_dict(orient="records"),
+    }
 
 # ── endpoints ─────────────────────────────────────────────────────────────────
 @app.post("/chunks")
@@ -106,7 +115,7 @@ async def get_all_scores():
     spnr, lipsync, clone = await asyncio.gather(
         loop.run_in_executor(executor, _run_spnr,    job),
         loop.run_in_executor(executor, _run_lipsync, job),
-        loop.run_in_executor(executor, _run_clone,   job),
+        loop.run_in_executor(executor, _run_voice_authenticity,   job),
     )
 
     elapsed = time.perf_counter() - t0
@@ -134,40 +143,15 @@ async def get_lipsync():
     elapsed = time.perf_counter() - t0
     return {**result, "runtime": f"{int(elapsed // 60)}m {elapsed % 60:.1f}s"}
 
-@app.get("/score/voice_clone")
-async def get_voice_clone():
+@app.get("/score/voice_authenticity")
+async def get_voice_authenticity():
     _require_chunks()
     t0     = time.perf_counter()
-    result = await asyncio.get_event_loop().run_in_executor(executor, _run_clone, dict(_state))
+    result = await asyncio.get_event_loop().run_in_executor(
+        executor, _run_voice_authenticity, dict(_state)
+    )
     elapsed = time.perf_counter() - t0
     return {**result, "runtime": f"{int(elapsed // 60)}m {elapsed % 60:.1f}s"}
-
-@app.get("/score/age_gender")
-async def get_age_gender():
-    _require_chunks()
-    s = dict(_state)
-
-    clone_result = await asyncio.get_event_loop().run_in_executor(executor, _run_clone, s)
-
-    if clone_result["score"] >= CLONE_FAIL_THRESHOLD:
-        return {
-            "triggered": False,
-            "reason":    "Voice clone score acceptable — age/gender check skipped.",
-            "score":     None,
-            "segments":  [],
-        }
-
-    t0     = time.perf_counter()
-    result = await asyncio.get_event_loop().run_in_executor(executor, _run_age_gender, s)
-    elapsed = time.perf_counter() - t0
-
-    return {
-        "triggered": True,
-        "reason":    "Voice clone score too low — audio/face consistency checked.",
-        "score":     result["score"],
-        "segments":  result["segments"],
-        "runtime":   f"{int(elapsed // 60)}m {elapsed % 60:.1f}s",
-    }
 
 @app.get("/status")
 def status():

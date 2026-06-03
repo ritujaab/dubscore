@@ -4,6 +4,7 @@
 
 1) Backend
 
+- Add GEMINI_API_KEY to .env
 - Change to the backend folder and install Python deps:
 
 ```bash

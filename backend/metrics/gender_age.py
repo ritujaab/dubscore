@@ -4,19 +4,21 @@ import pandas as pd
 import torch
 import torch.nn as nn
 import cv2
-from deepface import DeepFace
-from transformers import Wav2Vec2Processor
-from transformers.models.wav2vec2.modeling_wav2vec2 import (
-    Wav2Vec2Model,
-    Wav2Vec2PreTrainedModel,
+from transformers import (
+    Wav2Vec2Processor, AutoConfig, AutoImageProcessor,
+    ViTModel, ViTPreTrainedModel,
 )
+from transformers.models.wav2vec2.modeling_wav2vec2 import (
+    Wav2Vec2Model, Wav2Vec2PreTrainedModel,
+)
+from transformers.modeling_outputs import ImageClassifierOutput
+from PIL import Image
 
 # ──────────────────────────────────────────────
-# Audio model definition
+# Audio model
 # ──────────────────────────────────────────────
 
 class _ModelHead(nn.Module):
-
     def __init__(self, config, num_labels):
         super().__init__()
         self.dense    = nn.Linear(config.hidden_size, config.hidden_size)
@@ -24,17 +26,13 @@ class _ModelHead(nn.Module):
         self.out_proj = nn.Linear(config.hidden_size, num_labels)
 
     def forward(self, features, **kwargs):
-        x = features
+        x = self.dropout(features)
+        x = torch.tanh(self.dense(x))
         x = self.dropout(x)
-        x = self.dense(x)
-        x = torch.tanh(x)
-        x = self.dropout(x)
-        x = self.out_proj(x)
-        return x
+        return self.out_proj(x)
 
 
-class _AgeGenderModel(Wav2Vec2PreTrainedModel):
-
+class _AgeGenderAudioModel(Wav2Vec2PreTrainedModel):
     def __init__(self, config):
         super().__init__(config)
         self.config   = config
@@ -44,29 +42,79 @@ class _AgeGenderModel(Wav2Vec2PreTrainedModel):
         self.init_weights()
 
     def forward(self, input_values):
-        outputs      = self.wav2vec2(input_values)
-        hidden_states = outputs[0]
-        hidden_states = torch.mean(hidden_states, dim=1)
-        logits_age    = self.age(hidden_states)
-        logits_gender = torch.softmax(self.gender(hidden_states), dim=1)
-        return hidden_states, logits_age, logits_gender
+        hidden_states = torch.mean(self.wav2vec2(input_values)[0], dim=1)
+        return hidden_states, self.age(hidden_states), torch.softmax(self.gender(hidden_states), dim=1)
 
 
 # ──────────────────────────────────────────────
-# Lazy-loaded globals (loaded once on first use)
+# Video model (ViT — replaces DeepFace)
 # ──────────────────────────────────────────────
+
+class _AgeGenderViTModel(ViTPreTrainedModel):
+    def __init__(self, config):
+        super().__init__(config)
+        self.vit = ViTModel(config, add_pooling_layer=False)
+        self.age_head = nn.Sequential(
+            nn.Linear(config.hidden_size, 256), nn.ReLU(), nn.Dropout(0.1),
+            nn.Linear(256, 64),  nn.ReLU(), nn.Dropout(0.1),
+            nn.Linear(64, 1)
+        )
+        self.gender_head = nn.Sequential(
+            nn.Linear(config.hidden_size, 256), nn.ReLU(), nn.Dropout(0.1),
+            nn.Linear(256, 64),  nn.ReLU(), nn.Dropout(0.1),
+            nn.Linear(64, 1), nn.Sigmoid()
+        )
+        self.num_labels = 2
+        self.config.num_labels = 2
+        self.classifier = nn.Linear(config.hidden_size, 2)
+        self.post_init()
+
+    def forward(self, pixel_values=None, **kwargs):
+        pooled = self.vit(pixel_values=pixel_values)[0][:, 0]
+        return ImageClassifierOutput(
+            logits=torch.cat([self.age_head(pooled), self.gender_head(pooled)], dim=1)
+        )
+
+
+# ──────────────────────────────────────────────
+# Lazy-loaded globals
+# ──────────────────────────────────────────────
+
+_DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 _audio_processor = None
 _audio_model     = None
-_DEVICE        = "cuda" if torch.cuda.is_available() else "cpu"
 _AUDIO_MODEL_ID  = "audeering/wav2vec2-large-robust-24-ft-age-gender"
+
+_vit_processor   = None
+_vit_model       = None
+_VIT_MODEL_ID    = "abhilash88/age-gender-prediction"
 
 
 def _load_audio_model():
     global _audio_processor, _audio_model
     if _audio_processor is None:
+        print("[age_gender] Loading audio model...")
         _audio_processor = Wav2Vec2Processor.from_pretrained(_AUDIO_MODEL_ID)
-        _audio_model     = _AgeGenderModel.from_pretrained(_AUDIO_MODEL_ID).to(_DEVICE)
+        _audio_model     = _AgeGenderAudioModel.from_pretrained(_AUDIO_MODEL_ID).to(_DEVICE)
+        print("[age_gender] Audio model ready.")
+
+
+def _load_vit_model():
+    global _vit_processor, _vit_model
+    if _vit_processor is None:
+        print("[age_gender] Loading video (ViT) model...")
+        _vit_processor = AutoImageProcessor.from_pretrained(_VIT_MODEL_ID)
+        _vit_processor.do_center_crop = False
+        _vit_processor.size           = {"height": 224, "width": 224}
+
+        _config    = AutoConfig.from_pretrained(_VIT_MODEL_ID, trust_remote_code=True)
+        _vit_model = _AgeGenderViTModel.from_pretrained(
+            _VIT_MODEL_ID, config=_config,
+            ignore_mismatched_sizes=True, trust_remote_code=True
+        ).to(_DEVICE)
+        _vit_model.eval()
+        print("[age_gender] Video model ready.")
 
 
 # ──────────────────────────────────────────────
@@ -74,32 +122,44 @@ def _load_audio_model():
 # ──────────────────────────────────────────────
 
 def _predict_audio_age_gender(signal: np.ndarray, sampling_rate: int) -> dict:
-    """
-    Returns {"age": float, "gender": "male"|"female"|"child", "gender_probs": array}
-    from a raw 1-D float32 audio signal.
-    """
     _load_audio_model()
-
     y = _audio_processor(signal, sampling_rate=sampling_rate)
-    y = y["input_values"][0].reshape(1, -1)
-    y = torch.from_numpy(y).to(_DEVICE)
+    y = torch.from_numpy(y["input_values"][0].reshape(1, -1)).to(_DEVICE)
 
     with torch.no_grad():
         _, logits_age, logits_gender = _audio_model(y)
 
-    age          = float(logits_age.squeeze().cpu().numpy()) * 100   # model outputs ~0-1 scaled
-    gender_probs = logits_gender.squeeze().cpu().numpy()             # [female, male, child]
-    gender_idx   = int(np.argmax(gender_probs))
+    age          = float(logits_age.squeeze().cpu().numpy()) * 100
+    gender_probs = logits_gender.squeeze().cpu().numpy()
     gender_map   = {0: "female", 1: "male", 2: "child"}
 
     return {
         "age":          age,
-        "gender":       gender_map[gender_idx],
+        "gender":       gender_map[int(np.argmax(gender_probs))],
         "gender_probs": gender_probs,
     }
 
 
+def _predict_frame_age_gender(frame_bgr: np.ndarray) -> dict | None:
+    """Predict age/gender from a single BGR frame using the ViT model."""
+    _load_vit_model()
+
+    image  = Image.fromarray(cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB))
+    inputs = _vit_processor(images=image, return_tensors="pt")
+    inputs = {k: v.to(_DEVICE) for k, v in inputs.items()}
+
+    with torch.no_grad():
+        logits = _vit_model(**inputs).logits[0]
+
+    age                = int(round(max(0, min(100, logits[0].item()))))
+    gender_prob_female = logits[1].item()
+    gender             = "woman" if gender_prob_female >= 0.5 else "man"
+
+    return {"age": age, "gender": gender}
+
+
 def _predict_video_age_gender(video_path: str) -> dict | None:
+    """Extract first readable frame and run ViT age/gender prediction."""
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
         print(f"[age_gender] Could not open {video_path}")
@@ -113,32 +173,17 @@ def _predict_video_age_gender(video_path: str) -> dict | None:
         return None
 
     try:
-        analysis = DeepFace.analyze(frame, actions=["age", "gender"], enforce_detection=False)
-        if not isinstance(analysis, list):
-            analysis = [analysis]
-        face = analysis[0]
-
-        # Newer DeepFace returns gender as a dict {"Man": float, "Woman": float}
-        gender_raw = face.get("gender")
-        if isinstance(gender_raw, dict):
-            gender_str = max(gender_raw, key=gender_raw.get).lower()  # "man" or "woman"
-        else:
-            gender_str = str(gender_raw).lower()
-
-        return {"age": face.get("age"), "gender": gender_str}
-
+        return _predict_frame_age_gender(frame)
     except Exception as e:
-        print(f"[age_gender] DeepFace error on {video_path}: {e}")
+        print(f"[age_gender] ViT error on {video_path}: {e}")
         return None
 
 
 # ──────────────────────────────────────────────
-# Scoring
+# Scoring (unchanged)
 # ──────────────────────────────────────────────
 
 def _gender_match_score(video_gender: str, audio_gender: str) -> float:
-    """1.0 if same gender, 0.0 otherwise."""
-    # DeepFace returns 'man'/'woman'; normalise to male/female
     normalise = {"man": "male", "woman": "female"}
     vg = normalise.get(video_gender, video_gender)
     ag = normalise.get(audio_gender, audio_gender)
@@ -146,23 +191,18 @@ def _gender_match_score(video_gender: str, audio_gender: str) -> float:
 
 
 def _age_match_score(video_age: float, audio_age: float, tolerance: float = 15.0) -> float:
-    """
-    Gaussian-style score centred on 0 difference, where a gap of
-    *tolerance* years gives ~0.5 and larger gaps approach 0.
-    """
     diff = abs(video_age - audio_age)
     return float(np.exp(-0.5 * (diff / tolerance) ** 2))
 
 
 def _compute_match_score(video_result: dict, audio_result: dict) -> float:
-    """Combine gender (60 %) and age (40 %) into a single [0, 1] score."""
     g_score = _gender_match_score(video_result["gender"], audio_result["gender"])
-    a_score = _age_match_score(video_result["age"],    audio_result["age"])
+    a_score = _age_match_score(video_result["age"],       audio_result["age"])
     return round(0.6 * g_score + 0.4 * a_score, 4)
 
 
 # ──────────────────────────────────────────────
-# Public entry-point
+# Public entry-point (unchanged)
 # ──────────────────────────────────────────────
 
 def age_gender_score(
@@ -171,7 +211,6 @@ def age_gender_score(
     sr_dub: int,
     video_root: str = "./output",
 ) -> tuple[float, pd.DataFrame]:
-    import pandas as pd
 
     audio_results = _collect_audio_predictions(dub_intervals, v_dub, sr_dub)
     video_results = _collect_video_predictions(video_root)
@@ -182,67 +221,55 @@ def age_gender_score(
 
     report = []
     for seg_idx, (audio, faces) in enumerate(zip(audio_results, video_results.values())):
-        # Best matching face for this segment's audio
         face_scores = [_compute_match_score(face, audio) for face in faces]
         best_score  = max(face_scores) if face_scores else 0.0
-        best_face   = faces[np.argmax(face_scores)] if face_scores else {}
+        best_face   = faces[int(np.argmax(face_scores))] if face_scores else {}
 
         report.append({
-            "Segment":      seg_idx,
-            "Audio_Age":    round(audio["age"], 2),
-            "Audio_Gender": audio["gender"],
+            "Segment":          seg_idx,
+            "Audio_Age":        round(audio["age"], 2),
+            "Audio_Gender":     audio["gender"],
             "Best_Face_Age":    round(best_face.get("age", 0), 2),
             "Best_Face_Gender": best_face.get("gender", "unknown"),
-            "Num_Faces":    len(faces),
-            "Best_Score":   round(best_score, 4),
-            "Status":       "OK" if best_score >= 0.5 else "FLAG",
+            "Num_Faces":        len(faces),
+            "Best_Score":       round(best_score, 4),
+            "Status":           "OK" if best_score >= 0.5 else "FLAG",
         })
 
         print(f"[age_gender] Segment {seg_idx} — audio=({audio['gender']}, {audio['age']:.1f}), "
               f"face scores={[round(s,3) for s in face_scores]}, best={best_score:.4f}")
 
-    df = pd.DataFrame(report)
-
-    if df.empty:
-        return 0.0, df
-
-    overall = float(df["Best_Score"].mean())
+    df      = pd.DataFrame(report)
+    overall = float(df["Best_Score"].mean()) if not df.empty else 0.0
     print(f"\n[age_gender] Overall score: {overall:.4f}")
-
     return overall, df
 
 
 # ──────────────────────────────────────────────
-# Internal helpers
+# Internal helpers (unchanged)
 # ──────────────────────────────────────────────
 
 def _collect_audio_predictions(dub_intervals, v_dub: np.ndarray, sr_dub: int) -> list:
     import librosa
-
     results = []
     for interval in dub_intervals:
         start, end = interval[0], interval[1]
         if isinstance(start, float) or start < len(v_dub) * 0.01:
-            start_s = int(start * sr_dub)
-            end_s   = int(end   * sr_dub)
+            start_s, end_s = int(start * sr_dub), int(end * sr_dub)
         else:
             start_s, end_s = int(start), int(end)
 
         chunk = v_dub[start_s:end_s].astype(np.float32)
         if chunk.size == 0:
             continue
-
         if sr_dub != 16000:
             chunk = librosa.resample(chunk, orig_sr=sr_dub, target_sr=16000)
 
-        pred = _predict_audio_age_gender(chunk, 16000)
-        results.append(pred)
-
+        results.append(_predict_audio_age_gender(chunk, 16000))
     return results
 
 
 def _collect_video_predictions(video_root: str) -> dict:
-    """Returns {segment_name: [face_dicts]} for each segment folder."""
     results = {}
     if not os.path.isdir(video_root):
         print(f"[age_gender] video_root not found: {video_root}")
@@ -259,7 +286,6 @@ def _collect_video_predictions(video_root: str) -> dict:
             inner_path = os.path.join(pycrop_path, inner_folder)
             if not os.path.isdir(inner_path):
                 continue
-
             for file_name in os.listdir(inner_path):
                 if not file_name.lower().endswith(".avi"):
                     continue
@@ -268,7 +294,6 @@ def _collect_video_predictions(video_root: str) -> dict:
                     faces.append(pred)
 
         results[folder_name] = faces
-    
-    print(results)
 
+    print(results)
     return results

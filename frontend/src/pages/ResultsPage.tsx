@@ -3,9 +3,8 @@ import type {
   AllScoresResponse,
   SpnrSegment,
   LipsyncSegment,
-  CloneSegment,
-  OverallSegment,
-  AgeGenderSegment
+  VoiceAuthSegment,
+  OverallSegment
 } from '../types'
 
 export default function ResultsPage({
@@ -32,18 +31,7 @@ export default function ResultsPage({
         <ScoreCard label="Overall"  score={overall} highlight />
         <ScoreCard label="SpNR"     score={data.spnr.score}    runtime={data.spnr.runtime} />
         <ScoreCard label="Lip Sync" score={data.lipsync.score} runtime={data.lipsync.runtime} />
-        {data.age_gender.triggered
-          ? <ScoreCard
-              label="Age / Gender"
-              score={data.age_gender.score ?? 0}
-              runtime={data.age_gender.runtime}
-            />
-          : <ScoreCard
-              label="Voice Clone"
-              score={data.voice_clone.score}
-              runtime={data.voice_clone.runtime}
-            />
-        }
+        <ScoreCard label={data.voice_authenticity.method === 'clone' ? 'Voice Clone' : 'Age / Gender'} score={data.voice_authenticity.score} runtime={data.voice_authenticity.runtime}/>
       </div>
 
       {/* overall heatmap — averaged across all three metrics per segment */}
@@ -58,12 +46,7 @@ export default function ResultsPage({
                 <div>Seg {s.index + 1}</div>
                 {s.spnrNorm    != null && <div>SpNR:  {(s.spnrNorm    * 100).toFixed(0)}%</div>}
                 {s.lipsyncNorm != null && <div>Sync:  {(s.lipsyncNorm * 100).toFixed(0)}%</div>}
-                {s.cloneNorm   != null && (
-                  <div>
-                    {data.age_gender.triggered ? 'Age/Gender' : 'Clone'}:{' '}
-                    {(s.cloneNorm * 100).toFixed(0)}%
-                  </div>
-                )}
+                {s.cloneNorm   != null && <div>Voice Auth: {(s.cloneNorm * 100).toFixed(0)}%</div>}
                 <div style={{ borderTop: '0.5px solid rgba(255,255,255,0.15)', marginTop: 4, paddingTop: 4 }}>
                   Avg: {(s.norm * 100).toFixed(0)}%
                 </div>
@@ -123,73 +106,46 @@ export default function ResultsPage({
         />
       </Section>
 
-      {data.age_gender.triggered ? (
-        <Section title="Age / gender consistency" score={data.age_gender.score ?? undefined}>
+      <Section
+        title={data.voice_authenticity.method === 'clone' ? 'Voice clone similarity' : 'Age / gender consistency'}
+        score={data.voice_authenticity.score}
+      >
+        {data.voice_authenticity.method === 'age_gender' && (
           <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 16 }}>
-            {data.age_gender.reason}
+            Voice clone score below threshold — audio/face consistency used instead.
           </div>
-          <Heatmap
-            segments={data.age_gender.segments}
-            normFn={seg => {
-              const s = seg as AgeGenderSegment
-              return s.Best_Score > 0 ? s.Best_Score : null
-            }}
-            tipFn={seg => {
-              const s = seg as AgeGenderSegment
-              if (!s.Best_Score) return (
-                <>
-                  <div>Seg {s.Segment+1}</div>
-                  <div>No result</div>
-                </>
-              )
-              return (
-                <>
-                  <div>Seg {s.Segment+1}</div>
-                  <div>Audio: {s.Audio_Gender}, {s.Audio_Age?.toFixed(0)}yr</div>
-                  <div>Face: {s.Best_Face_Gender}, {s.Best_Face_Age}yr</div>
-                  <div>Score: {(s.Best_Score * 100).toFixed(0)}% &nbsp;·&nbsp; {s.Status}</div>
-                </>
-              )
-            }}
-          />
-        </Section>
-      ) : (
-        <>
-          <Section title="Voice clone similarity" score={data.voice_clone.score}>
-            <Heatmap
-              segments={data.voice_clone.segments}
-              normFn={seg => {
-                const s = seg as CloneSegment
-                return s.Similarity > 0 ? s.Similarity : null
-              }}
-              tipFn={seg => {
-                const s = seg as CloneSegment
-                if (!s.Similarity) return (
+        )}
+        <Heatmap
+          segments={data.voice_authenticity.segments}
+          normFn={seg => {
+            const s = seg as VoiceAuthSegment
+            if (data.voice_authenticity.method === 'clone')
+              return s.Similarity != null && s.Similarity > 0 ? s.Similarity : null
+            return s.Best_Score != null && s.Best_Score > 0 ? s.Best_Score : null
+          }}
+          tipFn={seg => {
+            const s = seg as VoiceAuthSegment
+            if (data.voice_authenticity.method === 'clone') return (
+              <>
+                <div>Seg {s.Segment}</div>
+                <div>Similarity: {s.Similarity != null ? (s.Similarity * 100).toFixed(0) + '%' : 'N/A'} &nbsp;·&nbsp; {s.Status}</div>
+              </>
+            )
+            return (
+              <>
+                <div>Seg {s.Segment}</div>
+                {s.Best_Score ? (
                   <>
-                    <div>Seg {s.Segment}</div>
-                    <div>No result</div>
+                    <div>Audio: {s.Audio_Gender}, {s.Audio_Age?.toFixed(0)}yr</div>
+                    <div>Face: {s.Best_Face_Gender}, {s.Best_Face_Age}yr</div>
+                    <div>Score: {(s.Best_Score * 100).toFixed(0)}% &nbsp;·&nbsp; {s.Status}</div>
                   </>
-                )
-                return (
-                  <>
-                    <div>Seg {s.Segment + 1} &nbsp;·&nbsp; {s.Orig_Start}s – {s.Orig_End}s</div>
-                    <div>Similarity: {(s.Similarity * 100).toFixed(0)}% &nbsp;·&nbsp; {s.Status}</div>
-                  </>
-                )
-              }}
-            />
-          </Section>
-          <div style={{
-            fontSize: 12, color: 'var(--muted)',
-            padding: '12px 16px',
-            background: 'rgba(93,202,165,0.06)',
-            border: '0.5px solid rgba(93,202,165,0.15)',
-            borderRadius: 10, marginBottom: 48,
-          }}>
-            ✓ Voice clone score acceptable — age/gender check was not needed.
-          </div>
-        </>
-      )}
+                ) : <div>No result</div>}
+              </>
+            )
+          }}
+        />
+      </Section>
     </div>
   )
 }
@@ -203,12 +159,9 @@ function computeWeightedOverall(overallSegs: OverallSegment[], data: AllScoresRe
 
   overallSegs.forEach((seg, i) => {
     const lipsyncSeg = data.lipsync.segments[i] as LipsyncSegment | undefined
-    const cloneSeg   = data.voice_clone.segments[i] as CloneSegment | undefined
 
     const dur =
-      lipsyncSeg ? (lipsyncSeg.End   - lipsyncSeg.Start)     :
-      cloneSeg   ? (cloneSeg.Dub_End - cloneSeg.Dub_Start)   :
-      1
+      lipsyncSeg ? (lipsyncSeg.End   - lipsyncSeg.Start)     :      1
 
     weightedSum += seg.norm * dur
     totalWeight += dur
@@ -222,8 +175,7 @@ function buildOverallSegments(data: AllScoresResponse): OverallSegment[] {
 
   return Array.from({ length: len }, (_, i) => {
     const lipsyncSeg = data.lipsync.segments[i]     as LipsyncSegment | undefined
-    const cloneSeg   = data.voice_clone.segments[i] as CloneSegment   | undefined
-    const ageSeg     = data.age_gender.segments?.[i] as AgeGenderSegment | undefined
+    const authSeg = data.voice_authenticity.segments[i] as VoiceAuthSegment | undefined
 
     const spnrSegs = data.spnr.segments.filter(
       (s): s is SpnrSegment => _spnrBelongsToChunk(s as SpnrSegment, lipsyncSeg)
@@ -237,10 +189,9 @@ function buildOverallSegments(data: AllScoresResponse): OverallSegment[] {
       ? Math.max(0, 1 - Math.abs(lipsyncSeg['Least Lag']) / 8)
       : null
 
-    // use age/gender if triggered, else clone — both treat 0/missing as null
-    const cloneNorm = data.age_gender.triggered
-      ? (ageSeg != null && ageSeg.Best_Score > 0 ? ageSeg.Best_Score : null)
-      : (cloneSeg != null && cloneSeg.Similarity > 0 ? cloneSeg.Similarity : null)
+    const cloneNorm = data.voice_authenticity.method === 'clone'
+      ? (authSeg?.Similarity != null && authSeg.Similarity > 0 ? authSeg.Similarity : null)
+      : (authSeg?.Best_Score != null && authSeg.Best_Score > 0 ? authSeg.Best_Score : null)
 
     const norms = [spnrNorm, lipsyncNorm, cloneNorm].filter((n): n is number => n != null)
     const norm  = norms.length ? norms.reduce((a, b) => a + b, 0) / norms.length : 0

@@ -28,25 +28,24 @@ export interface LipsyncSegment {
   Status:     'GOOD' | 'OK' | 'BAD' | 'NO RESULT'
 }
 
-export interface CloneSegment {
-  Segment:    number
-  Orig_Start: number
-  Orig_End:   number
-  Dub_Start:  number
-  Dub_End:    number
-  Similarity: number
-  Status:     string
-}
+export type VoiceAuthMethod = 'clone' | 'age_gender'
 
-export interface AgeGenderSegment {
-  Segment:          number
-  Audio_Age:        number
-  Audio_Gender:     string
-  Best_Face_Age:    number
-  Best_Face_Gender: string
-  Num_Faces:        number
-  Best_Score:       number
-  Status:           string
+export interface VoiceAuthSegment {
+  // clone fields
+  Segment?:    number
+  Orig_Start?: number
+  Orig_End?:   number
+  Dub_Start?:  number
+  Dub_End?:    number
+  Similarity?: number
+  // age_gender fields
+  Audio_Age?:        number
+  Audio_Gender?:     string
+  Best_Face_Age?:    number
+  Best_Face_Gender?: string
+  Num_Faces?:        number
+  Best_Score?:       number
+  Status?:           string
 }
 
 export interface MetricResult<T> {
@@ -55,19 +54,18 @@ export interface MetricResult<T> {
   runtime:  string
 }
 
-export interface AgeGenderResponse {
-  triggered: boolean
-  reason:    string
-  score:     number | null
-  segments:  AgeGenderSegment[]
-  runtime?:  string
+
+export interface VoiceAuthResult {
+  score:    number
+  method:   VoiceAuthMethod
+  segments: VoiceAuthSegment[]
+  runtime:  string
 }
 
 export interface AllScoresResponse {
-  spnr:        MetricResult<SpnrSegment>
-  lipsync:     MetricResult<LipsyncSegment>
-  voice_clone: MetricResult<CloneSegment>
-  age_gender:  AgeGenderResponse
+  spnr:               MetricResult<SpnrSegment>
+  lipsync:            MetricResult<LipsyncSegment>
+  voice_authenticity: VoiceAuthResult
 }
 
 export interface OverallSegment {

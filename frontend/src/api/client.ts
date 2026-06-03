@@ -3,8 +3,7 @@ import type {
   MetricResult,
   SpnrSegment,
   LipsyncSegment,
-  CloneSegment,
-  AgeGenderResponse
+  VoiceAuthResult
 } from '../types'
 
 const BASE = 'http://127.0.0.1:8000'
@@ -28,9 +27,6 @@ export const api = {
   getLipsync: () =>
     request<MetricResult<LipsyncSegment>>('/score/lipsync'),
 
-  getVoiceClone: () =>
-    request<MetricResult<CloneSegment>>('/score/voice_clone'),
-
-  getAgeGender: () =>
-  request<AgeGenderResponse>('/score/age_gender'),
+  getVoiceAuthenticity: () =>
+    request<VoiceAuthResult>('/score/voice_authenticity'),
 }
