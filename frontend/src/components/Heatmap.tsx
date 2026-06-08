@@ -5,7 +5,7 @@ type AnySegment = SpnrSegment | LipsyncSegment | VoiceAuthSegment | OverallSegme
 interface HeatmapProps {
   segments: AnySegment[]
   normFn:   (seg: AnySegment) => number | null
-  tipFn:    (seg: AnySegment) => React.ReactNode
+  tipFn:    (seg: AnySegment, index: number) => React.ReactNode
 }
 
 function cellColor(norm: number): string {
@@ -47,7 +47,7 @@ export default function Heatmap({ segments, normFn, tipFn }: HeatmapProps) {
               onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.transform = 'scaleY(1.2)' }}
               onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.transform = 'scaleY(1)' }}
             >
-              <Tooltip>{tipFn(seg)}</Tooltip>
+              <Tooltip>{tipFn(seg, i)}</Tooltip>
             </div>
           )
         })}

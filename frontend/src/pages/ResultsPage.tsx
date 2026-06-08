@@ -4,6 +4,7 @@ import type {
   SpnrSegment,
   LipsyncSegment,
   VoiceAuthSegment,
+  ProsodySegment,
   OverallSegment
 } from '../types'
 
@@ -27,28 +28,36 @@ export default function ResultsPage({
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 40 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12, marginBottom: 40 }}>
         <ScoreCard label="Overall"  score={overall} highlight />
-        <ScoreCard label="SpNR"     score={data.spnr.score}    runtime={data.spnr.runtime} />
-        <ScoreCard label="Lip Sync" score={data.lipsync.score} runtime={data.lipsync.runtime} />
-        <ScoreCard label={data.voice_authenticity.method === 'clone' ? 'Voice Clone' : 'Age / Gender'} score={data.voice_authenticity.score} runtime={data.voice_authenticity.runtime}/>
+        <ScoreCard label="SpNR"     score={data.spnr.score}     runtime={data.spnr.runtime} />
+        <ScoreCard label="Lip Sync" score={data.lipsync.score}  runtime={data.lipsync.runtime} />
+        <ScoreCard label="Prosody"  score={data.prosody.score}  runtime={data.prosody.runtime} />
+        {data.voice_authenticity.method === 'clone'
+          ? <ScoreCard label="Voice Clone" score={data.voice_authenticity.score} runtime={data.voice_authenticity.runtime} />
+          : <ScoreCard label="Age / Gender" score={data.voice_authenticity.score} runtime={data.voice_authenticity.runtime} />
+        }
       </div>
 
-      {/* overall heatmap — averaged across all three metrics per segment */}
+      {/* overall heatmap */}
       <Section title="Overall — all segments">
         <Heatmap
           segments={overallSegments}
           normFn={seg => (seg as OverallSegment).norm}
           tipFn={seg => {
             const s = seg as OverallSegment
+            const ls = data.lipsync.segments[s.index] as LipsyncSegment | undefined
             return (
               <>
-                <div>Seg {s.index + 1}</div>
-                {s.spnrNorm    != null && <div>SpNR:  {(s.spnrNorm    * 100).toFixed(0)}%</div>}
-                {s.lipsyncNorm != null && <div>Sync:  {(s.lipsyncNorm * 100).toFixed(0)}%</div>}
-                {s.cloneNorm   != null && <div>Voice Auth: {(s.cloneNorm * 100).toFixed(0)}%</div>}
+                <div style={{ fontWeight: 500, marginBottom: 4 }}>
+                  Seg {s.index + 1} &nbsp;·&nbsp; {ls?.Start}s – {ls?.End}s
+                </div>
+                {s.spnrNorm    != null && <div>SpNR &nbsp;·&nbsp; {(s.spnrNorm    * 100).toFixed(0)}%</div>}
+                {s.lipsyncNorm != null && <div>Sync &nbsp;·&nbsp; {(s.lipsyncNorm * 100).toFixed(0)}%</div>}
+                {s.prosodyNorm != null && <div>Prosody &nbsp;·&nbsp; {(s.prosodyNorm * 100).toFixed(0)}%</div>}
+                {s.cloneNorm   != null && <div>{data.voice_authenticity.method === 'clone' ? 'Clone' : 'Age/Gender'} &nbsp;·&nbsp; {(s.cloneNorm * 100).toFixed(0)}%</div>}
                 <div style={{ borderTop: '0.5px solid rgba(255,255,255,0.15)', marginTop: 4, paddingTop: 4 }}>
-                  Avg: {(s.norm * 100).toFixed(0)}%
+                  Avg &nbsp;·&nbsp; {(s.norm * 100).toFixed(0)}%
                 </div>
               </>
             )
@@ -56,29 +65,31 @@ export default function ResultsPage({
         />
       </Section>
 
-      {/* spnr — one cell per fixed chunk, averaged across ASR segments inside */}
+      {/* spnr — weighted average of ASR segments within each chunk */}
       <Section title="SpNR — speech noise ratio" score={data.spnr.score}>
         <Heatmap
-          segments={data.lipsync.segments}  
+          segments={data.lipsync.segments}
           normFn={seg => {
-            const ls = seg as LipsyncSegment
-            const segs = data.spnr.segments.filter(
-              s => _spnrBelongsToChunk(s as SpnrSegment, ls)
-            )
+            const ls   = seg as LipsyncSegment
+            const segs = data.spnr.segments.filter(s => _spnrBelongsToChunk(s as SpnrSegment, ls)) as SpnrSegment[]
             if (!segs.length) return null
-            return avg(segs.map(s => Math.max(0, 1 - (s as SpnrSegment).Delta / 3)))
+            const totalDur = segs.reduce((a, s) => a + (s.Orig_End - s.Orig_Start), 0)
+            return totalDur > 0
+              ? segs.reduce((a, s) => a + Math.max(0, 1 - s.Delta / 3) * (s.Orig_End - s.Orig_Start), 0) / totalDur
+              : null
           }}
-          tipFn={seg => {
-            const ls = seg as LipsyncSegment
-            const segs = data.spnr.segments.filter(
-              s => _spnrBelongsToChunk(s as SpnrSegment, ls)
-            ) as SpnrSegment[]
-            const meanDelta = segs.length ? avg(segs.map(s => s.Delta)) : null
+          tipFn={(seg, i) => {
+            const ls   = seg as LipsyncSegment
+            const segs = data.spnr.segments.filter(s => _spnrBelongsToChunk(s as SpnrSegment, ls)) as SpnrSegment[]
+            const totalDur  = segs.reduce((a, s) => a + (s.Orig_End - s.Orig_Start), 0)
+            const weightedDelta = totalDur > 0
+              ? segs.reduce((a, s) => a + s.Delta * (s.Orig_End - s.Orig_Start), 0) / totalDur
+              : null
             return (
               <>
-                <div>{ls.Start}s – {ls.End}s</div>
-                <div>{segs.length} ASR segment{segs.length !== 1 ? 's' : ''}</div>
-                {meanDelta != null && <div>Avg Δ {meanDelta.toFixed(2)} dB</div>}
+                <div style={{ fontWeight: 500, marginBottom: 4 }}>Seg {(i ?? 0) + 1}</div>
+                <div>{segs.length} phrase{segs.length !== 1 ? 's' : ''}</div>
+                {weightedDelta != null && <div>Avg Δ &nbsp;·&nbsp; {weightedDelta.toFixed(2)} dB</div>}
               </>
             )
           }}
@@ -94,18 +105,40 @@ export default function ResultsPage({
             if (s['Least Lag'] == null) return null
             return Math.max(0, 1 - Math.abs(s['Least Lag']) / 8)
           }}
-          tipFn={seg => {
+          tipFn={(seg, i) => {
             const s = seg as LipsyncSegment
             return (
               <>
-                <div>Seg {s.Segment}</div>
-                <div>Lag: {s['Least Lag'] ?? 'N/A'} fr &nbsp;·&nbsp; {s.Status}</div>
+                <div style={{ fontWeight: 500, marginBottom: 4 }}>Seg {(i ?? 0) + 1}</div>
+                <div>Lag &nbsp;·&nbsp; {s['Least Lag'] != null ? `${s['Least Lag']} fr` : 'N/A'}</div>
+                <div>Status &nbsp;·&nbsp; {s.Status}</div>
               </>
             )
           }}
         />
       </Section>
 
+      {/* prosody */}
+      <Section title="Prosodic smoothness" score={data.prosody.score}>
+        <Heatmap
+          segments={data.prosody.segments}
+          normFn={seg => (seg as ProsodySegment).Score ?? null}
+          tipFn={(seg, i) => {
+            const s = seg as ProsodySegment
+            return (
+              <>
+                <div style={{ fontWeight: 500, marginBottom: 4 }}>Seg {(i ?? 0) + 1}</div>
+                <div>Pitch &nbsp;·&nbsp; {(s.Pitch  * 100).toFixed(0)}%</div>
+                <div>Energy &nbsp;·&nbsp; {(s.Energy * 100).toFixed(0)}%</div>
+                <div>Rhythm &nbsp;·&nbsp; {(s.Rhythm * 100).toFixed(0)}%</div>
+                <div>Status &nbsp;·&nbsp; {s.Status}</div>
+              </>
+            )
+          }}
+        />
+      </Section>
+
+      {/* voice auth */}
       <Section
         title={data.voice_authenticity.method === 'clone' ? 'Voice clone similarity' : 'Age / gender consistency'}
         score={data.voice_authenticity.score}
@@ -123,22 +156,24 @@ export default function ResultsPage({
               return s.Similarity != null && s.Similarity > 0 ? s.Similarity : null
             return s.Best_Score != null && s.Best_Score > 0 ? s.Best_Score : null
           }}
-          tipFn={seg => {
+          tipFn={(seg, i) => {
             const s = seg as VoiceAuthSegment
             if (data.voice_authenticity.method === 'clone') return (
               <>
-                <div>Seg {s.Segment}</div>
-                <div>Similarity: {s.Similarity != null ? (s.Similarity * 100).toFixed(0) + '%' : 'N/A'} &nbsp;·&nbsp; {s.Status}</div>
+                <div style={{ fontWeight: 500, marginBottom: 4 }}>Seg {(i ?? 0) + 1}</div>
+                <div>Similarity &nbsp;·&nbsp; {s.Similarity != null ? `${(s.Similarity * 100).toFixed(0)}%` : 'N/A'}</div>
+                <div>Status &nbsp;·&nbsp; {s.Status ?? '—'}</div>
               </>
             )
             return (
               <>
-                <div>Seg {s.Segment}</div>
+                <div style={{ fontWeight: 500, marginBottom: 4 }}>Seg {(i ?? 0) + 1}</div>
                 {s.Best_Score ? (
                   <>
-                    <div>Audio: {s.Audio_Gender}, {s.Audio_Age?.toFixed(0)}yr</div>
-                    <div>Face: {s.Best_Face_Gender}, {s.Best_Face_Age}yr</div>
-                    <div>Score: {(s.Best_Score * 100).toFixed(0)}% &nbsp;·&nbsp; {s.Status}</div>
+                    <div>Audio &nbsp;·&nbsp; {s.Audio_Gender}, {s.Audio_Age?.toFixed(0)}yr</div>
+                    <div>Face &nbsp;·&nbsp; {s.Best_Face_Gender}, {s.Best_Face_Age}yr</div>
+                    <div>Score &nbsp;·&nbsp; {(s.Best_Score * 100).toFixed(0)}%</div>
+                    <div>Status &nbsp;·&nbsp; {s.Status}</div>
                   </>
                 ) : <div>No result</div>}
               </>
@@ -189,14 +224,17 @@ function buildOverallSegments(data: AllScoresResponse): OverallSegment[] {
       ? Math.max(0, 1 - Math.abs(lipsyncSeg['Least Lag']) / 8)
       : null
 
+    const prosodySeg  = data.prosody.segments[i] as ProsodySegment | undefined
+    const prosodyNorm = prosodySeg?.Score ?? null
+
     const cloneNorm = data.voice_authenticity.method === 'clone'
       ? (authSeg?.Similarity != null && authSeg.Similarity > 0 ? authSeg.Similarity : null)
       : (authSeg?.Best_Score != null && authSeg.Best_Score > 0 ? authSeg.Best_Score : null)
 
-    const norms = [spnrNorm, lipsyncNorm, cloneNorm].filter((n): n is number => n != null)
+    const norms = [spnrNorm, lipsyncNorm, cloneNorm, prosodyNorm].filter((n): n is number => n != null)
     const norm  = norms.length ? norms.reduce((a, b) => a + b, 0) / norms.length : 0
 
-    return { index: i, norm, spnrNorm, lipsyncNorm, cloneNorm }
+    return { index: i, norm, spnrNorm, lipsyncNorm, cloneNorm, prosodyNorm }
   })
 }
 

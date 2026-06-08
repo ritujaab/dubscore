@@ -3,6 +3,7 @@ import type {
   MetricResult,
   SpnrSegment,
   LipsyncSegment,
+  ProsodySegment,
   VoiceAuthResult
 } from '../types'
 
@@ -26,6 +27,9 @@ export const api = {
 
   getLipsync: () =>
     request<MetricResult<LipsyncSegment>>('/score/lipsync'),
+
+  getProsody: () =>
+  request<MetricResult<ProsodySegment>>('/score/prosody'),
 
   getVoiceAuthenticity: () =>
     request<VoiceAuthResult>('/score/voice_authenticity'),

@@ -10,10 +10,11 @@ from extract_audio import seperate
 from metrics.spnr import spnr_score
 from metrics.lipsync import lipsync_score
 from metrics.voice_clone import clone_score
+from metrics.prosody import prosody_score
 from metrics.gender_age import age_gender_score
 
 app      = FastAPI(title="Dub Quality API")
-executor = ProcessPoolExecutor(max_workers=3)
+executor = ProcessPoolExecutor(max_workers=4)
 
 app.add_middleware(
     CORSMiddleware,
@@ -43,6 +44,13 @@ def _run_spnr(job: dict):
 
 def _run_lipsync(job: dict):
     score, df = lipsync_score(job["dub_intervals"], job["sr_dub"])
+    df = df.replace({np.nan: None})
+    return {"score": score, "segments": df.to_dict(orient="records")}
+
+def _run_prosody(job: dict):
+    score, df = prosody_score(
+        job["dub_intervals"], job["v_dub"], job["sr_dub"]
+    )
     df = df.replace({np.nan: None})
     return {"score": score, "segments": df.to_dict(orient="records")}
 
@@ -140,6 +148,16 @@ async def get_lipsync():
     _require_chunks()
     t0     = time.perf_counter()
     result = await asyncio.get_event_loop().run_in_executor(executor, _run_lipsync, dict(_state))
+    elapsed = time.perf_counter() - t0
+    return {**result, "runtime": f"{int(elapsed // 60)}m {elapsed % 60:.1f}s"}
+
+@app.get("/score/prosody")
+async def get_prosody():
+    _require_chunks()
+    t0     = time.perf_counter()
+    result = await asyncio.get_event_loop().run_in_executor(
+        executor, _run_prosody, dict(_state)
+    )
     elapsed = time.perf_counter() - t0
     return {**result, "runtime": f"{int(elapsed // 60)}m {elapsed % 60:.1f}s"}
 

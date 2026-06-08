@@ -5,10 +5,11 @@ import type { AllScoresResponse } from '../types'
 type StepState = 'idle' | 'running' | 'done' | 'error'
 
 interface Steps {
-  chunks:  StepState
-  spnr:    StepState
-  lipsync: StepState
-  auth:    StepState
+  chunks:   StepState
+  spnr:     StepState
+  lipsync:  StepState
+  auth:     StepState
+  prosody:  StepState
 }
 
 interface StepTimes {
@@ -16,6 +17,7 @@ interface StepTimes {
   spnr?:   string
   lipsync?: string
   auth?: string
+  prosody?: string
 }
 
 export default function UploadPage({
@@ -30,7 +32,7 @@ export default function UploadPage({
   const [dubFile,  setDubFile]  = useState<File | null>(null)
   const [running,  setRunning]  = useState(false)
   const [error,    setError]    = useState<string | null>(null)
-  const [steps,    setSteps]    = useState<Steps>({ chunks: 'idle', spnr: 'idle', lipsync: 'idle', auth: 'idle' })
+  const [steps,    setSteps]    = useState<Steps>({ chunks: 'idle', spnr: 'idle', lipsync: 'idle', auth: 'idle', prosody: 'idle' })
   const [times,    setTimes]    = useState<StepTimes>({})
 
   const origRef = useRef<HTMLInputElement>(null)
@@ -45,7 +47,7 @@ export default function UploadPage({
     if (!origFile || !dubFile) return
     setRunning(true)
     setError(null)
-    setSteps({ chunks: 'idle', spnr: 'idle', lipsync: 'idle', auth: 'idle' })
+    setSteps({ chunks: 'idle', spnr: 'idle', lipsync: 'idle', auth: 'idle', prosody: 'idle' })
 
     setTimes({})
 
@@ -61,6 +63,7 @@ export default function UploadPage({
 
       setStep('spnr', 'running')
       setStep('lipsync', 'running')
+      setStep('prosody', 'running')
 
       // Start SpNR and LipSync together
       const spnrPromise = api.getSpnr()
@@ -80,6 +83,16 @@ export default function UploadPage({
         })
         .catch(e => {
           setStep('lipsync', 'error')
+          throw e
+        })
+
+      const prosodyResult = await api.getProsody()
+        .then(r => {
+          setStep('prosody', 'done', elapsed(t0))
+          return r
+        })
+        .catch(e => {
+          setStep('prosody', 'error')
           throw e
         })
 
@@ -103,6 +116,7 @@ export default function UploadPage({
         spnr: spnrResult,
         lipsync: lipsyncResult,
         voice_authenticity: authResult,
+        prosody: prosodyResult
       })
 
     } catch (err: unknown) {
@@ -112,7 +126,8 @@ export default function UploadPage({
         chunks:     s.chunks     === 'running' ? 'error' : s.chunks,
         spnr:       s.spnr       === 'running' ? 'error' : s.spnr,
         lipsync:    s.lipsync    === 'running' ? 'error' : s.lipsync,
-        auth:       s.auth       === 'running' ? 'error' : s.auth
+        auth:       s.auth       === 'running' ? 'error' : s.auth,
+        prosody:    s.prosody    === 'running' ? 'error' : s.prosody
       }))
     }
   }
@@ -207,6 +222,7 @@ export default function UploadPage({
           <StepRow state={steps.chunks}  label="Extracting & chunking audio"  time={times.chunks}  />
           <StepRow state={steps.spnr}    label="SpNR — speech noise ratio"    time={times.spnr}    />
           <StepRow state={steps.lipsync} label="Lip sync analysis"            time={times.lipsync} />
+          <StepRow state={steps.prosody} label="Prosodic smoothness" time={times.prosody} />
           <StepRow state={steps.auth} label="Voice authenticity" time={times.auth} />
         </div>
       )}

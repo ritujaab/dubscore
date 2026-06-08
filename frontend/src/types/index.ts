@@ -28,6 +28,17 @@ export interface LipsyncSegment {
   Status:     'GOOD' | 'OK' | 'BAD' | 'NO RESULT'
 }
 
+export interface ProsodySegment {
+  Segment: number
+  Start:   number
+  End:     number
+  Pitch:   number
+  Energy:  number
+  Rhythm:  number
+  Score:   number
+  Status:  string
+}
+
 export type VoiceAuthMethod = 'clone' | 'age_gender'
 
 export interface VoiceAuthSegment {
@@ -66,12 +77,14 @@ export interface AllScoresResponse {
   spnr:               MetricResult<SpnrSegment>
   lipsync:            MetricResult<LipsyncSegment>
   voice_authenticity: VoiceAuthResult
+  prosody:            MetricResult<ProsodySegment>
 }
 
 export interface OverallSegment {
-  index:       number
-  norm:        number
-  spnrNorm:    number | null
-  lipsyncNorm: number | null
-  cloneNorm:   number | null
+  index:        number
+  norm:         number
+  spnrNorm:     number | null
+  lipsyncNorm:  number | null
+  cloneNorm:    number | null
+  prosodyNorm:  number | null
 }
