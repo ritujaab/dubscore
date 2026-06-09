@@ -6,13 +6,7 @@ export default function LandingPage({
   onSelectReference: () => void
 }) {
   return (
-    <div style={{ padding: '64px 0 56px', textAlign: 'center' }}>
-      <div style={{
-        display: 'inline-block', fontSize: 11, letterSpacing: '0.12em',
-        textTransform: 'uppercase', color: 'var(--accent)', marginBottom: 20,
-      }}>
-        ● Dub Quality Metrics
-      </div>
+    <div style={{ padding: '34px 0 56px', textAlign: 'center' }}>
 
       <h1 style={{
         fontFamily: 'var(--font-head)', fontSize: 'clamp(36px, 6vw, 64px)',
@@ -24,7 +18,7 @@ export default function LandingPage({
 
       <p style={{
         fontSize: 15, color: 'var(--muted)', maxWidth: 460,
-        margin: '0 auto 48px', lineHeight: 1.7,
+        margin: '0 auto 30px', lineHeight: 1.7,
       }}>
         Automated quality scoring for dubbed video — analyse with and without references
       </p>
@@ -35,12 +29,12 @@ export default function LandingPage({
       }}>
         <ModeCard
           title="Referenceless"
-          description="Score a dub using only the original and dubbed video files."
+          description="Score against the original video."
           onClick={onSelect}
         />
         <ModeCard
           title="Reference"
-          description="Score against reference videos using semantic similarity."
+          description="Score against reference videos."
           onClick={onSelectReference}
         />
       </div>
@@ -49,49 +43,109 @@ export default function LandingPage({
 }
 
 function ModeCard({
-  title, description, onClick,
+  title,
+  description,
+  onClick,
 }: {
   title: string
   description: string
   onClick?: () => void
 }) {
+  const features =
+    title === 'Referenceless'
+      ? [
+          'SPNR scoring',
+          'Lip-sync analysis',
+          'Prosody evaluation',
+          'Voice authenticity',
+        ]
+      : [
+          'Semantic similarity',
+        ]
+
   return (
     <div
       onClick={onClick}
       style={{
         background: 'var(--bg2)',
         border: '0.5px solid var(--border)',
-        borderRadius: 16, padding: '28px 24px',
-        textAlign: 'left', cursor: 'pointer',
-        opacity: 1,
-        transition: 'border-color 0.15s, background 0.15s',
-      }}
-      onMouseEnter={e => {
-        const el = e.currentTarget as HTMLDivElement
-        el.style.borderColor = 'var(--border2)'
-        el.style.background  = 'var(--bg3)'
-      }}
-      onMouseLeave={e => {
-        const el = e.currentTarget as HTMLDivElement
-        el.style.borderColor = 'var(--border)'
-        el.style.background  = 'var(--bg2)'
+        borderRadius: 16,
+        padding: '28px 24px',
+        textAlign: 'left',
+        cursor: 'pointer',
+        height: 350,
+
+        display: 'flex',
+        flexDirection: 'column',
       }}
     >
-      <div style={{
-        width: 36, height: 36, borderRadius: 8,
-        background: 'var(--bg3)', border: '0.5px solid var(--border)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontSize: 16, marginBottom: 14, color: 'var(--accent)',
-      }}>◆</div>
+      <div
+        style={{
+          width: 36,
+          height: 36,
+          borderRadius: 8,
+          background: 'var(--bg3)',
+          border: '0.5px solid var(--border)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: 16,
+          marginBottom: 14,
+          color: 'var(--accent)',
+        }}
+      >
+        ◆
+      </div>
 
-      <h3 style={{
-        fontFamily: 'var(--font-head)', fontSize: 17,
-        fontWeight: 700, marginBottom: 6, color: 'var(--text)',
-      }}>{title}</h3>
+      <h3
+        style={{
+          fontFamily: 'var(--font-head)',
+          fontSize: 17,
+          fontWeight: 700,
+          marginBottom: 6,
+        }}
+      >
+        {title}
+      </h3>
 
-      <p style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.6 }}>
+      <p
+        style={{
+          fontSize: 12,
+          color: 'var(--muted)',
+          lineHeight: 1.6,
+          marginBottom: 20,
+        }}
+      >
         {description}
       </p>
+
+      <div style={{ flex: 1 }}>
+        {features.map((feature) => (
+          <div
+            key={feature}
+            style={{
+              fontSize: 12,
+              color: 'var(--text)',
+              marginBottom: 10,
+            }}
+          >
+            ✓ {feature}
+          </div>
+        ))}
+      </div>
+
+      <div
+        style={{
+          marginTop: 'auto',
+          paddingTop: 16,
+          borderTop: '0.5px solid var(--border)',
+          fontSize: 12,
+          color: 'var(--accent)',
+          fontWeight: 400,
+        }}
+      >
+        Start analysis →
+      </div>
     </div>
   )
 }

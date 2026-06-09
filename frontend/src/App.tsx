@@ -25,15 +25,6 @@ export default function App() {
         <div style={{ fontFamily: 'var(--font-head)', fontWeight: 800, fontSize: 20, letterSpacing: -0.5 }}>
           Dub<span style={{ color: 'var(--accent)' }}>Score</span>
         </div>
-        <div style={{
-          fontSize: 11, color: 'var(--muted)',
-          background: 'var(--bg3)',
-          border: '0.5px solid var(--border)',
-          padding: '4px 10px', borderRadius: 100,
-          letterSpacing: '0.08em', textTransform: 'uppercase',
-        }}>
-          Quality Analysis
-        </div>
       </nav>
 
       {page === 'landing' && (
