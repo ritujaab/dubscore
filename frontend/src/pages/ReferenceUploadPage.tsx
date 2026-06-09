@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState } from 'react'
 import { api } from '../api/client'
 import type { SemanticResult } from '../types'
 import DropZone from '../components/Dropzone'

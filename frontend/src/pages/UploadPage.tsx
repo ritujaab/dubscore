@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState } from 'react'
 import { api } from '../api/client'
 import type { AllScoresResponse } from '../types'
 import DropZone from '../components/Dropzone'
@@ -35,9 +35,6 @@ export default function UploadPage({
   const [error,    setError]    = useState<string | null>(null)
   const [steps,    setSteps]    = useState<Steps>({ chunks: 'idle', spnr: 'idle', lipsync: 'idle', auth: 'idle', prosody: 'idle' })
   const [times,    setTimes]    = useState<StepTimes>({})
-
-  const origRef = useRef<HTMLInputElement>(null)
-  const dubRef  = useRef<HTMLInputElement>(null)
 
   function setStep(key: keyof Steps, state: StepState, time?: string) {
     setSteps(s  => ({ ...s, [key]: state }))
