@@ -1,4 +1,10 @@
-export default function LandingPage({ onSelect }: { onSelect: () => void }) {
+export default function LandingPage({
+  onSelect,
+  onSelectReference,
+}: {
+  onSelect:          () => void
+  onSelectReference: () => void
+}) {
   return (
     <div style={{ padding: '64px 0 56px', textAlign: 'center' }}>
       <div style={{
@@ -20,8 +26,7 @@ export default function LandingPage({ onSelect }: { onSelect: () => void }) {
         fontSize: 15, color: 'var(--muted)', maxWidth: 460,
         margin: '0 auto 48px', lineHeight: 1.7,
       }}>
-        Automated quality scoring for dubbed video — analyse lip sync,
-        speech noise ratio, and voice fidelity.
+        Automated quality scoring for dubbed video — analyse with and without references
       </p>
 
       <div style={{
@@ -31,15 +36,12 @@ export default function LandingPage({ onSelect }: { onSelect: () => void }) {
         <ModeCard
           title="Referenceless"
           description="Score a dub using only the original and dubbed video files."
-          badge="Live"
-          badgeLive
           onClick={onSelect}
         />
         <ModeCard
           title="Reference"
-          description="Score against a gold-standard reference transcription or alignment."
-          badge="Coming soon"
-          disabled
+          description="Score against reference videos using semantic similarity."
+          onClick={onSelectReference}
         />
       </div>
     </div>
@@ -47,28 +49,24 @@ export default function LandingPage({ onSelect }: { onSelect: () => void }) {
 }
 
 function ModeCard({
-  title, description, badge, badgeLive, disabled, onClick,
+  title, description, onClick,
 }: {
   title: string
   description: string
-  badge: string
-  badgeLive?: boolean
-  disabled?: boolean
   onClick?: () => void
 }) {
   return (
     <div
-      onClick={disabled ? undefined : onClick}
+      onClick={onClick}
       style={{
         background: 'var(--bg2)',
         border: '0.5px solid var(--border)',
         borderRadius: 16, padding: '28px 24px',
-        textAlign: 'left', cursor: disabled ? 'not-allowed' : 'pointer',
-        opacity: disabled ? 0.4 : 1,
+        textAlign: 'left', cursor: 'pointer',
+        opacity: 1,
         transition: 'border-color 0.15s, background 0.15s',
       }}
       onMouseEnter={e => {
-        if (disabled) return
         const el = e.currentTarget as HTMLDivElement
         el.style.borderColor = 'var(--border2)'
         el.style.background  = 'var(--bg3)'
@@ -94,15 +92,6 @@ function ModeCard({
       <p style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.6 }}>
         {description}
       </p>
-
-      <div style={{
-        display: 'inline-block', fontSize: 10, padding: '2px 8px',
-        borderRadius: 100, marginTop: 12, letterSpacing: '0.06em',
-        textTransform: 'uppercase',
-        background: badgeLive ? 'rgba(93,202,165,0.12)' : 'rgba(136,135,128,0.12)',
-        color:      badgeLive ? 'var(--accent)'          : 'var(--muted)',
-        border:     badgeLive ? '0.5px solid rgba(93,202,165,0.25)' : '0.5px solid rgba(136,135,128,0.2)',
-      }}>{badge}</div>
     </div>
   )
 }

@@ -1,3 +1,5 @@
+import os
+import shutil
 import asyncio, time
 from concurrent.futures import ProcessPoolExecutor
 from fastapi import FastAPI, Form, HTTPException
@@ -12,6 +14,7 @@ from metrics.lipsync import lipsync_score
 from metrics.voice_clone import clone_score
 from metrics.prosody import prosody_score
 from metrics.gender_age import age_gender_score
+from metrics.semantic import semantic_score as _semantic_score
 
 app      = FastAPI(title="Dub Quality API")
 executor = ProcessPoolExecutor(max_workers=4)
@@ -23,6 +26,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+_ref_state: dict = {} 
 _state: dict = {}
 
 CLONE_THRESHOLD = 0.7
@@ -79,6 +83,20 @@ def _run_voice_authenticity(job: dict):
         "score":    ag_score_val,
         "method":   "age_gender",
         "segments": ag_df.to_dict(orient="records"),
+    }
+
+def _run_semantic(job: dict):
+    score, detail = _semantic_score(
+        job["dubbed_path"],
+        job["reference_paths"],
+    )
+    return {
+        "score":             score,
+        "precision":         detail["precision"],
+        "coverage":          detail["coverage"],
+        "chunk_scores":      detail["chunk_scores"],
+        "dubbed_transcript": detail["dubbed_transcript"],
+        "ref_pool_size":     detail["ref_pool_size"],
     }
 
 # ── endpoints ─────────────────────────────────────────────────────────────────
@@ -169,6 +187,33 @@ async def get_voice_authenticity():
         executor, _run_voice_authenticity, dict(_state)
     )
     elapsed = time.perf_counter() - t0
+    return {**result, "runtime": f"{int(elapsed // 60)}m {elapsed % 60:.1f}s"}
+
+@app.post("/reference/analyse")
+async def reference_analyse(
+    dubbed_file:    UploadFile = File(...),
+    reference_files: list[UploadFile] = File(...),
+):
+    os.makedirs("uploads", exist_ok=True)
+    dub_path = f"uploads/{dubbed_file.filename}"
+    with open(dub_path, "wb") as f:
+        shutil.copyfileobj(dubbed_file.file, f)
+
+    ref_paths = []
+    for rf in reference_files:
+        p = f"uploads/{rf.filename}"
+        with open(p, "wb") as f:
+            shutil.copyfileobj(rf.file, f)
+        ref_paths.append(p)
+
+    _ref_state.update({"dubbed_path": dub_path, "reference_paths": ref_paths})
+
+    t0     = time.perf_counter()
+    result = await asyncio.get_event_loop().run_in_executor(
+        executor, _run_semantic, dict(_ref_state)
+    )
+    elapsed = time.perf_counter() - t0
+
     return {**result, "runtime": f"{int(elapsed // 60)}m {elapsed % 60:.1f}s"}
 
 @app.get("/status")

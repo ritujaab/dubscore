@@ -4,7 +4,8 @@ import type {
   SpnrSegment,
   LipsyncSegment,
   ProsodySegment,
-  VoiceAuthResult
+  VoiceAuthResult,
+  SemanticResult
 } from '../types'
 
 const BASE = 'http://127.0.0.1:8000'
@@ -33,4 +34,7 @@ export const api = {
 
   getVoiceAuthenticity: () =>
     request<VoiceAuthResult>('/score/voice_authenticity'),
+
+  postReferenceAnalyse: (formData: FormData) =>
+    request<SemanticResult>('/reference/analyse', { method: 'POST', body: formData }),
 }

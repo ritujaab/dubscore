@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react'
 import { api } from '../api/client'
 import type { AllScoresResponse } from '../types'
+import DropZone from '../components/Dropzone'
 
 type StepState = 'idle' | 'running' | 'done' | 'error'
 
@@ -147,16 +148,16 @@ export default function UploadPage({
         <DropZone
           label="Original"
           hint="Source language video"
-          file={origFile}
-          inputRef={origRef}
-          onFile={setOrigFile}
+          files={origFile ? [origFile] : []}
+          multiple={false}
+          onFiles={fs => setOrigFile(fs[0])}
         />
         <DropZone
           label="Dubbed"
           hint="Translated / dubbed video"
-          file={dubFile}
-          inputRef={dubRef}
-          onFile={setDubFile}
+          files={dubFile ? [dubFile] : []}
+          multiple={false}
+          onFiles={fs => setDubFile(fs[0])}
         />
       </div>
 
@@ -224,56 +225,6 @@ export default function UploadPage({
           <StepRow state={steps.lipsync} label="Lip sync analysis"            time={times.lipsync} />
           <StepRow state={steps.prosody} label="Prosodic smoothness" time={times.prosody} />
           <StepRow state={steps.auth} label="Voice authenticity" time={times.auth} />
-        </div>
-      )}
-    </div>
-  )
-}
-
-function DropZone({
-  label, hint, file, inputRef, onFile,
-}: {
-  label: string
-  hint: string
-  file: File | null
-  inputRef: React.RefObject<HTMLInputElement | null>
-  onFile: (f: File) => void
-}) {
-  const [drag, setDrag] = useState(false)
-
-  return (
-    <div
-      onDragOver={e => { e.preventDefault(); setDrag(true) }}
-      onDragLeave={() => setDrag(false)}
-      onDrop={e => { e.preventDefault(); setDrag(false); const f = e.dataTransfer.files[0]; if (f) onFile(f) }}
-      onClick={() => inputRef.current?.click()}
-      style={{
-        background: drag ? 'rgba(93,202,165,0.04)' : 'var(--bg2)',
-        border: `1.5px dashed ${drag || file ? 'var(--accent)' : 'var(--border2)'}`,
-        borderRadius: 16, padding: '36px 24px', textAlign: 'center',
-        cursor: 'pointer', transition: 'all 0.15s',
-      }}
-    >
-      <input
-        ref={inputRef}
-        type="file"
-        accept="video/*"
-        style={{ display: 'none' }}
-        onChange={e => { const f = e.target.files?.[0]; if (f) onFile(f) }}
-      />
-      <div style={{ fontSize: 28, color: file ? 'var(--accent)' : 'var(--muted)', marginBottom: 12 }}>
-        {file ? '✓' : '↑'}
-      </div>
-      <div style={{
-        fontFamily: 'var(--font-head)', fontSize: 13, fontWeight: 600,
-        color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4,
-      }}>
-        {label}
-      </div>
-      <div style={{ fontSize: 11, color: 'var(--muted)' }}>{hint}</div>
-      {file && (
-        <div style={{ fontSize: 12, color: 'var(--text)', marginTop: 8, wordBreak: 'break-all' }}>
-          {file.name}
         </div>
       )}
     </div>

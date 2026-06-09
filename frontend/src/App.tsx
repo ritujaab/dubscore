@@ -2,13 +2,16 @@ import { useState } from 'react'
 import LandingPage  from './pages/LandingPage'
 import UploadPage   from './pages/UploadPage'
 import ResultsPage  from './pages/ResultsPage'
-import type { AllScoresResponse } from './types'
+import ReferenceUploadPage from './pages/ReferenceUploadPage'
+import ReferenceResultsPage from './pages/ReferenceResultsPage'
+import type { AllScoresResponse, SemanticResult } from './types'
 
-type Page = 'landing' | 'upload' | 'results'
+type Page = 'landing' | 'upload' | 'results' | 'reference' | 'reference_results'
 
 export default function App() {
   const [page,    setPage]    = useState<Page>('landing')
   const [results, setResults] = useState<AllScoresResponse | null>(null)
+  const [refResults, setRefResults] = useState<SemanticResult | null>(null)
 
   return (
     <div style={{ maxWidth: 960, margin: '0 auto', padding: '0 24px' }}>
@@ -34,7 +37,19 @@ export default function App() {
       </nav>
 
       {page === 'landing' && (
-        <LandingPage onSelect={() => setPage('upload')} />
+        <LandingPage
+          onSelect={() => setPage('upload')}
+          onSelectReference={() => setPage('reference')}
+        />
+      )}
+      {page === 'reference' && (
+        <ReferenceUploadPage
+          onBack={() => setPage('landing')}
+          onDone={r => { setRefResults(r); setPage('reference_results') }}
+        />
+      )}
+      {page === 'reference_results' && refResults && (
+        <ReferenceResultsPage data={refResults} onBack={() => setPage('reference')} />
       )}
       {page === 'upload' && (
         <UploadPage

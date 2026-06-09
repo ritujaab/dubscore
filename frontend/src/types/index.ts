@@ -65,12 +65,21 @@ export interface MetricResult<T> {
   runtime:  string
 }
 
-
 export interface VoiceAuthResult {
   score:    number
   method:   VoiceAuthMethod
   segments: VoiceAuthSegment[]
   runtime:  string
+}
+
+export interface SemanticResult {
+  score:             number
+  precision:         number
+  coverage:          number
+  chunk_scores:      number[]
+  dubbed_transcript: string
+  ref_pool_size:     number
+  runtime:           string
 }
 
 export interface AllScoresResponse {
