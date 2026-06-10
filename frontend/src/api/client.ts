@@ -37,4 +37,7 @@ export const api = {
 
   postReferenceAnalyse: (formData: FormData) =>
     request<SemanticResult>('/reference/analyse', { method: 'POST', body: formData }),
+
+  cleanup: () =>
+    request<{ status: string }>('/cleanup', { method: 'POST' }),
 }

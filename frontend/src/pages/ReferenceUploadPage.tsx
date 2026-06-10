@@ -33,6 +33,8 @@ export default function ReferenceUploadPage({
       const result = await api.postReferenceAnalyse(fd)
       setStep('done')
       onDone(result)
+
+      api.cleanup().catch(e => console.warn('[cleanup]', e))
     } catch (err: unknown) {
       setStep('error')
       setError(err instanceof Error ? err.message : 'Unknown error')
@@ -55,7 +57,7 @@ export default function ReferenceUploadPage({
         <div style={{ marginBottom: 16 }}>
           <DropZone
             label="Dubbed"
-            hint="Upload the dubbed video to evaluate"
+            hint="Upload the dubbed video"
             files={dubFile ? [dubFile] : []}
             multiple={false}
             onFiles={fs => setDubFile(fs[0])}

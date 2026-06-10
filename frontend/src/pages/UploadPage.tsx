@@ -117,6 +117,8 @@ export default function UploadPage({
         prosody: prosodyResult
       })
 
+      api.cleanup().catch(e => console.warn('[cleanup]', e))
+
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Unknown error'
       setError(msg)
@@ -144,14 +146,14 @@ export default function UploadPage({
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 24 }}>
         <DropZone
           label="Original"
-          hint="Source language video"
+          hint="Upload the source language video"
           files={origFile ? [origFile] : []}
           multiple={false}
           onFiles={fs => setOrigFile(fs[0])}
         />
         <DropZone
           label="Dubbed"
-          hint="Translated / dubbed video"
+          hint="Upload the dubbed video"
           files={dubFile ? [dubFile] : []}
           multiple={false}
           onFiles={fs => setDubFile(fs[0])}

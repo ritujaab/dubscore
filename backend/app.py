@@ -6,6 +6,7 @@ from fastapi import FastAPI, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi import UploadFile, File
 import numpy as np
+import shutil
 
 from chunk_audio import get_chunks
 from extract_audio import seperate
@@ -30,6 +31,8 @@ _ref_state: dict = {}
 _state: dict = {}
 
 CLONE_THRESHOLD = 0.7
+
+CLEANUP_DIRS = ["audio", "separated", "uploads", "output"]
 
 def _require_chunks():
     if not _state:
@@ -99,7 +102,17 @@ def _run_semantic(job: dict):
         "ref_pool_size":     detail["ref_pool_size"],
     }
 
+def _cleanup():
+    for d in CLEANUP_DIRS:
+        if os.path.exists(d):
+            shutil.rmtree(d)
+            print(f"[cleanup] Removed {d}")
+
 # ── endpoints ─────────────────────────────────────────────────────────────────
+@app.get("/health")
+def health():
+    return {"status": "ready"}
+
 @app.post("/chunks")
 async def compute_chunks(
     orig_file: UploadFile = File(...),
@@ -227,3 +240,9 @@ def status():
         "orig_file":   _state["orig_file"],
         "dub_file":    _state["dub_file"],
     }
+
+@app.post("/cleanup")
+def cleanup():
+    _cleanup()
+    _state.clear()
+    return {"status": "ok"}
