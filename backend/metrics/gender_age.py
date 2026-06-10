@@ -14,9 +14,7 @@ from transformers.models.wav2vec2.modeling_wav2vec2 import (
 from transformers.modeling_outputs import ImageClassifierOutput
 from PIL import Image
 
-# ──────────────────────────────────────────────
 # Audio model
-# ──────────────────────────────────────────────
 
 class _ModelHead(nn.Module):
     def __init__(self, config, num_labels):
@@ -45,10 +43,7 @@ class _AgeGenderAudioModel(Wav2Vec2PreTrainedModel):
         hidden_states = torch.mean(self.wav2vec2(input_values)[0], dim=1)
         return hidden_states, self.age(hidden_states), torch.softmax(self.gender(hidden_states), dim=1)
 
-
-# ──────────────────────────────────────────────
-# Video model (ViT — replaces DeepFace)
-# ──────────────────────────────────────────────
+# Video model
 
 class _AgeGenderViTModel(ViTPreTrainedModel):
     def __init__(self, config):
@@ -75,10 +70,6 @@ class _AgeGenderViTModel(ViTPreTrainedModel):
             logits=torch.cat([self.age_head(pooled), self.gender_head(pooled)], dim=1)
         )
 
-
-# ──────────────────────────────────────────────
-# Lazy-loaded globals
-# ──────────────────────────────────────────────
 
 _DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -116,10 +107,6 @@ def _load_vit_model():
         _vit_model.eval()
         print("[age_gender] Video model ready.")
 
-
-# ──────────────────────────────────────────────
-# Core prediction helpers
-# ──────────────────────────────────────────────
 
 def _predict_audio_age_gender(signal: np.ndarray, sampling_rate: int) -> dict:
     _load_audio_model()
@@ -179,10 +166,6 @@ def _predict_video_age_gender(video_path: str) -> dict | None:
         return None
 
 
-# ──────────────────────────────────────────────
-# Scoring (unchanged)
-# ──────────────────────────────────────────────
-
 def _gender_match_score(video_gender: str, audio_gender: str) -> float:
     normalise = {"man": "male", "woman": "female"}
     vg = normalise.get(video_gender, video_gender)
@@ -200,10 +183,6 @@ def _compute_match_score(video_result: dict, audio_result: dict) -> float:
     a_score = _age_match_score(video_result["age"],       audio_result["age"])
     return round(0.6 * g_score + 0.4 * a_score, 4)
 
-
-# ──────────────────────────────────────────────
-# Public entry-point (unchanged)
-# ──────────────────────────────────────────────
 
 def age_gender_score(
     dub_intervals: list,
@@ -244,10 +223,6 @@ def age_gender_score(
     print(f"\n[age_gender] Overall score: {overall:.4f}")
     return overall, df
 
-
-# ──────────────────────────────────────────────
-# Internal helpers (unchanged)
-# ──────────────────────────────────────────────
 
 def _collect_audio_predictions(dub_intervals, v_dub: np.ndarray, sr_dub: int) -> list:
     import librosa

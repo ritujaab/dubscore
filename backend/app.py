@@ -38,8 +38,6 @@ def _require_chunks():
     if not _state:
         raise HTTPException(status_code=400, detail="Chunks not initialised. Call POST /chunks first.")
 
-
-# ── worker functions (must be module-level for ProcessPoolExecutor) ───────────
 def _run_spnr(job: dict):
     score, df = spnr_score(
         job["orig_asr_intervals"], job["dub_asr_intervals"],

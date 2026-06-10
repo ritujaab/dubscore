@@ -6,51 +6,6 @@ def get_spnr(speech, noise):
     rms_n = np.sqrt(np.mean(noise  ** 2)) + 1e-10
     return 20.0 * np.log10(rms_s / rms_n)
 
-'''def compute_spnr(orig_intervals, dub_intervals, v_orig, n_orig, sr_orig, v_dub,  n_dub,  sr_dub):
-
-    report = []
-    for i, ((os_, oe_), (ds_, de_)) in enumerate(
-            zip(orig_intervals, dub_intervals)):
-
-        s_o = v_orig[os_:oe_];  n_o = n_orig[os_:oe_]
-        s_d = v_dub[ds_:de_];   n_d = n_dub[ds_:de_]
-
-        spnr_o = get_spnr(s_o, n_o)
-        spnr_d = get_spnr(s_d, n_d)
-        delta  = abs(spnr_o - spnr_d)
-
-        report.append({
-            "Segment":    i + 1,
-            "Orig_Start": round(os_ / sr_orig, 2),
-            "Orig_End":   round(oe_ / sr_orig, 2),
-            "Dub_Start":  round(ds_ / sr_dub,  2),
-            "Dub_End":    round(de_ / sr_dub,  2),
-            "Orig_SpNR":  round(spnr_o, 2),
-            "Dub_SpNR":   round(spnr_d, 2),
-            "Delta":      round(delta,  2),
-            "Status":     "FLAG" if delta >= 3 else "OK",
-        })
-
-    return pd.DataFrame(report)
-
-def spnr_score(*args, **kwargs):
-    spnr_data = compute_spnr(*args, **kwargs)
-    print(spnr_data)
-
-    if spnr_data.empty:
-        return 0.0
-
-    orig_dur = spnr_data["Orig_End"] - spnr_data["Orig_Start"]
-    dub_dur  = spnr_data["Dub_End"]  - spnr_data["Dub_Start"]
-    weights  = (orig_dur + dub_dur) / 2.0
-
-    total_w  = weights.sum()
-    if total_w == 0:
-        return 0.0
-
-    ok_weight = weights[spnr_data["Status"] == "OK"].sum()
-    return float(ok_weight / total_w), spnr_data'''
-
 def compute_spnr(orig_intervals, dub_intervals, v_orig, n_orig, sr_orig, v_dub, n_dub, sr_dub):
     report = []
 
