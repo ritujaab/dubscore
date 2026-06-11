@@ -14,6 +14,7 @@ os.makedirs(AUD_DIR, exist_ok=True)
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 def save_upload(upload: UploadFile, label: str):
+    os.makedirs("uploads", exist_ok=True)
     ext = os.path.splitext(upload.filename)[1]
 
     save_path = os.path.join(

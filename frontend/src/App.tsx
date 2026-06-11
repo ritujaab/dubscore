@@ -57,7 +57,7 @@ export default function App() {
   )
 
   return (
-    <div style={{ maxWidth: 960, margin: '0 auto', padding: '0 24px' }}>
+    <div style={{ margin: '0 auto', padding: '0 24px' }}>
       <nav style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         padding: '20px 0', borderBottom: '0.5px solid var(--border)',

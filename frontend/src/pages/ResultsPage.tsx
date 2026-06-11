@@ -1,4 +1,6 @@
+import { useState } from 'react'
 import Heatmap from '../components/Heatmap'
+import SegmentDrawer from '../components/SegmentDrawer'
 import type {
   AllScoresResponse,
   SpnrSegment,
@@ -17,6 +19,7 @@ export default function ResultsPage({
 }) {
   const overallSegments = buildOverallSegments(data)
   const overall = computeWeightedOverall(overallSegments, data)
+  const [activeSegment, setActiveSegment] = useState<number | null>(null)
 
   return (
     <div style={{ paddingTop: 48, paddingBottom: 80 }}>
@@ -62,6 +65,7 @@ export default function ResultsPage({
               </>
             )
           }}
+          onCellClick={i => setActiveSegment(i)}
         />
       </Section>
 
@@ -93,6 +97,7 @@ export default function ResultsPage({
               </>
             )
           }}
+          onCellClick={i => setActiveSegment(i)}
         />
       </Section>
 
@@ -115,6 +120,7 @@ export default function ResultsPage({
               </>
             )
           }}
+          onCellClick={i => setActiveSegment(i)}
         />
       </Section>
 
@@ -135,6 +141,7 @@ export default function ResultsPage({
               </>
             )
           }}
+          onCellClick={i => setActiveSegment(i)}
         />
       </Section>
 
@@ -179,8 +186,18 @@ export default function ResultsPage({
               </>
             )
           }}
+          onCellClick={i => setActiveSegment(i)}
         />
       </Section>
+
+      {activeSegment != null && (
+        <SegmentDrawer
+          index={activeSegment}
+          data={data}
+          overall={overallSegments[activeSegment]}
+          onClose={() => setActiveSegment(null)}
+        />
+      )}
     </div>
   )
 }

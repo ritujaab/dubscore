@@ -3,9 +3,10 @@ import type { SpnrSegment, LipsyncSegment, OverallSegment, VoiceAuthSegment } fr
 type AnySegment = SpnrSegment | LipsyncSegment | VoiceAuthSegment | OverallSegment
 
 interface HeatmapProps {
-  segments: AnySegment[]
-  normFn:   (seg: AnySegment) => number | null
-  tipFn:    (seg: AnySegment, index: number) => React.ReactNode
+  segments:    AnySegment[]
+  normFn:      (seg: AnySegment) => number | null
+  tipFn:       (seg: AnySegment, index: number) => React.ReactNode
+  onCellClick?: (index: number) => void
 }
 
 function cellColor(norm: number): string {
@@ -16,7 +17,7 @@ function cellColor(norm: number): string {
   return `rgb(${c[0]},${c[1]},${c[2]})`
 }
 
-export default function Heatmap({ segments, normFn, tipFn }: HeatmapProps) {
+export default function Heatmap({ segments, normFn, tipFn, onCellClick }: HeatmapProps) {
   if (!segments.length) {
     return (
       <div style={{ fontSize: 12, color: 'var(--muted)', padding: '8px 0' }}>
@@ -33,6 +34,7 @@ export default function Heatmap({ segments, normFn, tipFn }: HeatmapProps) {
           return (
             <div
               key={i}
+              onClick={() => onCellClick?.(i)}
               style={{
                 height: 32,
                 flexBasis: 24,
@@ -41,7 +43,7 @@ export default function Heatmap({ segments, normFn, tipFn }: HeatmapProps) {
                 borderRadius: 4,
                 background: norm != null ? cellColor(norm) : 'var(--bg3)',
                 position: 'relative',
-                cursor: 'pointer',
+                cursor: onCellClick ? 'pointer' : 'default',
                 transition: 'transform 0.1s',
               }}
               onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.transform = 'scaleY(1.2)' }}
